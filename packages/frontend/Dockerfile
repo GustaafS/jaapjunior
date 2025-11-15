@@ -13,12 +13,10 @@ RUN bun install --no-optional || bun install
 
 # Stap 3: Build frontend
 WORKDIR /app/packages/frontend
-ARG VITE_API_URL=http://localhost:3000
 ARG VITE_TEST_ENV=false
 ARG VITE_ENABLE_MODEL_CONTROLS=false
 ARG VITE_ENABLED_AGENTS=cs-wmo
 ARG VITE_ENABLE_FEEDBACK=true
-ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_TEST_ENV=$VITE_TEST_ENV
 ENV VITE_ENABLE_MODEL_CONTROLS=$VITE_ENABLE_MODEL_CONTROLS
 ENV VITE_ENABLED_AGENTS=$VITE_ENABLED_AGENTS
@@ -28,19 +26,26 @@ RUN bun run build
 # Production stage - Nginx
 FROM nginx:alpine
 
+# Installeer bash voor entrypoint script
+RUN apk add --no-cache bash
+
 # Copy built files
 COPY --from=builder /app/packages/frontend/dist /usr/share/nginx/html
 
-# Copy nginx configuration
-COPY packages/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+# Copy nginx template (NIET naar conf.d! Wordt runtime gegenereerd)
+COPY packages/frontend/nginx.conf.template /etc/nginx/templates/nginx.conf.template
+
+# Copy entrypoint script
+COPY packages/frontend/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # Expose port
 EXPOSE 80
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:80 || exit 1
+  CMD wget --quiet --tries=1 --spider http://localhost:80/health || exit 1
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Gebruik custom entrypoint dat nginx.conf genereert en nginx start
+ENTRYPOINT ["/entrypoint.sh"]
 

@@ -62,11 +62,18 @@ az containerapp update \
     --output none
 echo -e "${GREEN}✓ API updated${NC}"
 
-# Update Frontend
+# Get API internal URL voor frontend configuratie
+API_FQDN=$(az containerapp show --name jaapjunior-api --resource-group $RESOURCE_GROUP --query properties.configuration.ingress.fqdn -o tsv)
+API_BACKEND_URL="https://${API_FQDN}"
+
+echo -e "${BLUE}  Using API Backend URL: ${API_BACKEND_URL}${NC}"
+
+# Update Frontend met nieuwe image EN API URL
 az containerapp update \
     --name jaapjunior \
     --resource-group $RESOURCE_GROUP \
     --image $REGISTRY_SERVER/jaapjunior-frontend:latest \
+    --set-env-vars API_BACKEND_URL="$API_BACKEND_URL" \
     --output none
 echo -e "${GREEN}✓ Frontend updated${NC}"
 

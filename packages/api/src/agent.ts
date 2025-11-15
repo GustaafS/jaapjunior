@@ -1,5 +1,5 @@
 import { Anthropic } from "@llamaindex/anthropic";
-import { ChromaVectorStore } from "@llamaindex/chroma";
+import { QdrantVectorStore } from "@llamaindex/qdrant";
 import { OpenAI, OpenAIEmbedding } from "@llamaindex/openai";
 import { SimpleDirectoryReader } from "@llamaindex/readers/directory";
 import {
@@ -21,79 +21,51 @@ Settings.embedModel = new OpenAIEmbedding({
 });
 Settings.chunkOverlap = 100;
 
-const chromaUri = getEnvOrThrow("CHROMA_URI");
+const qdrantUri = getEnvOrThrow("QDRANT_URI");
+
+// Qdrant URL configuration for different environments
+function getQdrantConfig(uri: string) {
+	// For localhost, use full URI with port (combined container setup)
+	if (uri.includes('localhost') || uri.includes('127.0.0.1')) {
+		return { url: uri };
+	}
+
+	// For Azure internal ingress, strip port (ingress doesn't support explicit ports)
+	const urlWithoutPort = uri.replace(/:6333$/, '');
+	if (uri.includes('.internal.') || uri.includes('.azurecontainerapps.io')) {
+		return { url: urlWithoutPort };
+	}
+
+	// For other URLs, use as-is
+	return { url: uri };
+}
 
 async function createIndex(collectionName: string, dataDir = "./jw") {
 	console.log(
 		`Creating index. collectionName: ${collectionName}, dataDir: ${dataDir}`,
 	);
 
-	const vectorStore = new ChromaVectorStore({
+	const qdrantConfig = getQdrantConfig(qdrantUri);
+	console.log(`Qdrant config:`, qdrantConfig);
+
+	const vectorStore = new QdrantVectorStore({
 		collectionName,
-		chromaClientParams: { path: chromaUri },
-		embeddingModel: Settings.embedModel,
+		...qdrantConfig,
 	});
 
-	// Get existing docs if collection exists
-	let existingDocIds = new Set<string>();
-	try {
-		const collection = await vectorStore.getCollection();
-		const existingDocs = await collection.get();
-		existingDocIds = new Set(existingDocs.metadatas?.map((m) => m?.doc_id).filter((id): id is string => !!id));
-	} catch (error) {
-		console.log("Collection doesn't exist yet, will be created on first document insert");
-	}
+	console.log("Initializing storage context...");
+	const storageContext = await storageContextFromDefaults({ vectorStore });
 
 	console.log("Loading documents...");
 	const reader = new SimpleDirectoryReader();
-	const newDocs = await reader.loadData(dataDir).then((docs) =>
-		docs.map((d) => {
-			d.id_ = `${d.id_}__${d.generateHash()}`;
-			return d;
-		}),
-	);
-	const newDocIds = new Set(newDocs.map((d) => d.id_));
+	const docs = await reader.loadData(dataDir);
 
-	const docsToDelete = existingDocIds.difference(newDocIds);
-	const docsToAdd = newDocIds.difference(existingDocIds);
-
-	// Only delete docs if collection exists
-	if (existingDocIds.size > 0) {
-		const col = await vectorStore.getCollection();
-		for (const doc of docsToDelete) {
-		if (!doc) continue;
-
-		const { ids } = await col.get({ where: { doc_id: doc } });
-		if (ids.length) {
-			const batches = ids.reduce((acc, id, i) => {
-				if (i % 100 === 0) {
-					acc.push([id]);
-				} else {
-					acc[acc.length - 1].push(id);
-				}
-				return acc;
-			}, [] as string[][]);
-
-			for (const batch of batches) {
-				try {
-					await col.delete({ ids: batch });
-				} catch (err) {
-					console.error(err);
-				}
-			}
-		}
-		}
-	}
-
-	const newDocsToAdd = newDocs.filter((d) => docsToAdd.has(d.id_));
-
-	console.log("Creating vector store...");
-	const storageContext = await storageContextFromDefaults({ vectorStore });
-	const index = await VectorStoreIndex.fromDocuments(newDocsToAdd, {
-		docStoreStrategy: DocStoreStrategy.UPSERTS,
+	console.log(`Creating vector store index with ${docs.length} documents...`);
+	const index = await VectorStoreIndex.fromDocuments(docs, {
 		storageContext,
 	});
 
+	console.log("Index created successfully");
 	return index;
 }
 

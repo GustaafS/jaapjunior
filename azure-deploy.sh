@@ -352,6 +352,9 @@ echo -e "${YELLOW}→ Deploying Frontend...${NC}"
 
 # Get API internal URL
 API_FQDN=$(az containerapp show --name $API_CONTAINER --resource-group $RESOURCE_GROUP --query properties.configuration.ingress.fqdn -o tsv)
+API_BACKEND_URL="https://${API_FQDN}"
+
+echo -e "${BLUE}  Using API Backend URL: ${API_BACKEND_URL}${NC}"
 
 az containerapp create \
     --name $FRONTEND_CONTAINER \
@@ -368,11 +371,13 @@ az containerapp create \
     --cpu 0.25 \
     --memory 0.5Gi \
     --env-vars \
+        API_BACKEND_URL="$API_BACKEND_URL" \
         VITE_TEST_ENV=false \
     --output none 2>/dev/null || az containerapp update \
     --name $FRONTEND_CONTAINER \
     --resource-group $RESOURCE_GROUP \
     --image $REGISTRY_SERVER/jaapjunior-frontend:latest \
+    --set-env-vars API_BACKEND_URL="$API_BACKEND_URL" VITE_TEST_ENV=false \
     --output none
 
 echo -e "${GREEN}✓ Frontend deployed${NC}"

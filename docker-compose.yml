@@ -1,19 +1,18 @@
 services:
-  # ChromaDB vector database
-  chromadb:
-    image: chromadb/chroma:latest
-    container_name: jaapjunior-chromadb
+  # Qdrant vector database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: jaapjunior-qdrant
     ports:
-      - "${CHROMA_PORT:-8000}:8000"
+      - "${QDRANT_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
     volumes:
-      - chroma_data:/chroma/chroma
-    environment:
-      - IS_PERSISTENT=TRUE
+      - qdrant_data:/qdrant/storage
     networks:
       - jaapjunior
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/8000' || exit 1"]
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/6333' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -41,14 +40,13 @@ services:
       - API_TOKEN=${API_TOKEN:-default-api-token}
       - SHARED_PASSWORD=${SHARED_PASSWORD:-password}
       # Database
-      - CHROMA_URI=http://chromadb:8000
+      - QDRANT_URI=http://qdrant:6333
       - DB_PATH=/app/data/storage.sqlite
-      - CHROMA_COLLECTION=${CHROMA_COLLECTION:-jaapjunior}
       # Runtime
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3000
     depends_on:
-      chromadb:
+      qdrant:
         condition: service_healthy
     networks:
       - jaapjunior
@@ -74,6 +72,7 @@ services:
     ports:
       - "${FRONTEND_PORT:-5173}:80"
     environment:
+      - API_BACKEND_URL=http://api:3000
       - VITE_API_URL=${VITE_API_URL:-http://localhost:3000}
       - VITE_TEST_ENV=${VITE_TEST_ENV:-false}
       - VITE_ENABLE_MODEL_CONTROLS=${VITE_ENABLE_MODEL_CONTROLS:-false}
@@ -95,7 +94,7 @@ networks:
     driver: bridge
 
 volumes:
-  chroma_data:
+  qdrant_data:
     driver: local
   api_data:
     driver: local

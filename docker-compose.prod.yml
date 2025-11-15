@@ -1,29 +1,43 @@
-# Production override voor docker-compose
-# Gebruik: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Production override voor docker-compose (Combined Container Pattern)
+# Gebruik: docker-compose -f docker-compose.prod.yml up -d
+#
+# BELANGRIJK: Dit gebruikt Dockerfile.combined (Qdrant + API in 1 container)
 
 version: '3.8'
 
 services:
-  chromadb:
-    # Production optimalisaties
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 4G
-        reservations:
-          cpus: '1'
-          memory: 2G
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
+  # Combined container: Qdrant + API in 1 container
   api:
-    # Geen volume mounts voor source code (read-only productie)
+    build:
+      context: .
+      dockerfile: ./packages/api/Dockerfile.combined
+    container_name: jaapjunior-api
+    ports:
+      - "${API_PORT:-3000}:3000"
     volumes:
+      # SQLite database persistent
       - api_data:/app/data
+      # Qdrant storage persistent
+      - qdrant_data:/app/qdrant_storage
+    environment:
+      # API Keys (van .env of omgeving)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:?OPENAI_API_KEY is required}
+      - JINAAI_API_KEY=${JINAAI_API_KEY:?JINAAI_API_KEY is required}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # Security
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - API_TOKEN=${API_TOKEN:-default-api-token}
+      - SHARED_PASSWORD=${SHARED_PASSWORD:-password}
+      # Database (localhost want combined container)
+      - QDRANT_URI=http://localhost:6333
+      - DB_PATH=/app/data/jaapjunior.db
+      # Runtime
+      - NODE_ENV=production
+      - PORT=3000
+    networks:
+      - jaapjunior
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -32,16 +46,43 @@ services:
         reservations:
           cpus: '2'
           memory: 4G
-      replicas: 2  # Voor load balancing
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    environment:
-      - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
+  # Frontend (unchanged)
   frontend:
+    build:
+      context: .
+      dockerfile: ./packages/frontend/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+        VITE_TEST_ENV: ${VITE_TEST_ENV:-false}
+        VITE_ENABLE_MODEL_CONTROLS: ${VITE_ENABLE_MODEL_CONTROLS:-false}
+        VITE_ENABLED_AGENTS: ${VITE_ENABLED_AGENTS:-cs-wmo}
+        VITE_ENABLE_FEEDBACK: ${VITE_ENABLE_FEEDBACK:-true}
+    container_name: jaapjunior-frontend
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    environment:
+      - API_BACKEND_URL=http://api:3000
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:3000}
+      - VITE_TEST_ENV=${VITE_TEST_ENV:-false}
+      - VITE_ENABLE_MODEL_CONTROLS=${VITE_ENABLE_MODEL_CONTROLS:-false}
+      - VITE_ENABLED_AGENTS=${VITE_ENABLED_AGENTS:-cs-wmo}
+      - VITE_ENABLE_FEEDBACK=${VITE_ENABLE_FEEDBACK:-true}
+    depends_on:
+      - api
+    networks:
+      - jaapjunior
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -50,12 +91,28 @@ services:
         reservations:
           cpus: '0.5'
           memory: 256M
-      replicas: 2
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  jaapjunior:
+    driver: bridge
+
+volumes:
+  qdrant_data:
+    driver: local
+  api_data:
+    driver: local
+
+
 
 
 
