@@ -96,6 +96,10 @@ onMounted(async () => {
 				id: agent.id as "jw" | "wmo" | "cs-wmo",
 				label: agent.label,
 			}));
+			// Set default agent from API response
+			if (data.defaultAgent) {
+				selectedAgent.value = data.defaultAgent as "jw" | "wmo" | "cs-wmo";
+			}
 		} else {
 			// Fallback to all agents if API fails
 			visibleAgents.value = [

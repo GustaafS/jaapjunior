@@ -207,6 +207,7 @@ export const api = new Hono<{ Variables: Variables }>()
 	// Get available agents (runtime configuration)
 	.get("agents", (c) => {
 		const enabledAgentsEnv = process.env.ENABLED_AGENTS;
+		const defaultAgentEnv = process.env.DEFAULT_AGENT;
 
 		const allAgents = [
 			{ id: "jw", label: "JW" },
@@ -215,14 +216,24 @@ export const api = new Hono<{ Variables: Variables }>()
 		];
 
 		// If ENABLED_AGENTS is set, filter to only those agents
+		let availableAgents = allAgents;
 		if (enabledAgentsEnv) {
 			const enabledList = enabledAgentsEnv.split(",").map(a => a.trim());
-			const filteredAgents = allAgents.filter(agent => enabledList.includes(agent.id));
-			return c.json({ agents: filteredAgents });
+			availableAgents = allAgents.filter(agent => enabledList.includes(agent.id));
 		}
 
-		// Otherwise return all agents
-		return c.json({ agents: allAgents });
+		// Determine default agent
+		let defaultAgent = defaultAgentEnv || availableAgents[0]?.id || "jw";
+
+		// Ensure default agent is in available agents list
+		if (!availableAgents.find(a => a.id === defaultAgent)) {
+			defaultAgent = availableAgents[0]?.id || "jw";
+		}
+
+		return c.json({
+			agents: availableAgents,
+			defaultAgent: defaultAgent
+		});
 	})
 
 	// Send one-off question
