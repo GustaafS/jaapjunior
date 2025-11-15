@@ -167,6 +167,7 @@ export const api = new Hono<{ Variables: Variables }>()
 			[
 				"/api/v1",
 				"/api/v1/auth",
+				"/api/v1/agents",
 				"/api/v1/picks",
 				"/api/v1/responses",
 				"/api/v1/feedback",
@@ -201,6 +202,27 @@ export const api = new Hono<{ Variables: Variables }>()
 
 		c.status(401);
 		return c.text("Unauthorized");
+	})
+
+	// Get available agents (runtime configuration)
+	.get("agents", (c) => {
+		const enabledAgentsEnv = process.env.ENABLED_AGENTS;
+
+		const allAgents = [
+			{ id: "jw", label: "JW" },
+			{ id: "wmo", label: "WMO" },
+			{ id: "cs-wmo", label: "CS-WMO" },
+		];
+
+		// If ENABLED_AGENTS is set, filter to only those agents
+		if (enabledAgentsEnv) {
+			const enabledList = enabledAgentsEnv.split(",").map(a => a.trim());
+			const filteredAgents = allAgents.filter(agent => enabledList.includes(agent.id));
+			return c.json({ agents: filteredAgents });
+		}
+
+		// Otherwise return all agents
+		return c.json({ agents: allAgents });
 	})
 
 	// Send one-off question

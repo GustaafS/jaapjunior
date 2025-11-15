@@ -102,12 +102,12 @@ if [ "$HTTP_STATUS" == "200" ]; then
         echo "$BODY" | head -20
         exit 1
     else
-        # Check if we got a valid response with text
-        RESPONSE_TEXT=$(echo "$BODY" | grep -o '"response":"[^"]*"' | cut -d'"' -f4)
-        if [ -n "$RESPONSE_TEXT" ]; then
+        # Check if we got a valid response with content (array format)
+        RESPONSE_TEXT=$(echo "$BODY" | jq -r '.[0].content' 2>/dev/null)
+        if [ -n "$RESPONSE_TEXT" ] && [ "$RESPONSE_TEXT" != "null" ]; then
             echo -e "${GREEN}✓${NC} Message sent and response received"
             echo ""
-            echo "Response preview:"
+            echo "Response preview (first 200 chars):"
             echo "$RESPONSE_TEXT" | head -c 200
             echo "..."
             echo ""

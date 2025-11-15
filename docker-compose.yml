@@ -42,6 +42,8 @@ services:
       # Database
       - QDRANT_URI=http://qdrant:6333
       - DB_PATH=/app/data/storage.sqlite
+      # Agent Configuration (runtime)
+      - ENABLED_AGENTS=${ENABLED_AGENTS:-jw,wmo,cs-wmo}
       # Runtime
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3000

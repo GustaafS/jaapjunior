@@ -96,16 +96,26 @@ elif echo "$RESPONSE" | grep -q '"error"'; then
   echo ""
   echo "Check Railway logs: railway logs"
   exit 1
-elif echo "$RESPONSE" | grep -q '"response"'; then
-  echo "✅ Agent werkt correct met Qdrant"
-  echo ""
-  echo "Antwoord (eerste 200 chars):"
-  echo "$RESPONSE" | jq -r '.response' 2>/dev/null | head -c 200
-  echo "..."
 else
-  echo "❌ Unexpected response format"
-  echo "$RESPONSE" | head -50
-  exit 1
+  # Try array format first (new format: [{"content":"..."}])
+  RESPONSE_TEXT=$(echo "$RESPONSE" | jq -r '.[0].content' 2>/dev/null)
+
+  # Fallback to direct response field (old format: {"response":"..."})
+  if [ -z "$RESPONSE_TEXT" ] || [ "$RESPONSE_TEXT" = "null" ]; then
+    RESPONSE_TEXT=$(echo "$RESPONSE" | jq -r '.response' 2>/dev/null)
+  fi
+
+  if [ -n "$RESPONSE_TEXT" ] && [ "$RESPONSE_TEXT" != "null" ]; then
+    echo "✅ Agent werkt correct met Qdrant"
+    echo ""
+    echo "Antwoord (eerste 200 chars):"
+    echo "$RESPONSE_TEXT" | head -c 200
+    echo "..."
+  else
+    echo "❌ Unexpected response format"
+    echo "$RESPONSE" | head -50
+    exit 1
+  fi
 fi
 
 echo ""

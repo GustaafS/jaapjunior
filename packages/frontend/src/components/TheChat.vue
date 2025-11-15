@@ -82,23 +82,50 @@ const hasToPickMessage = computed(() => {
 	return Array.isArray(lastMessage);
 });
 
-const enabledAgentsEnv = import.meta.env.VITE_ENABLED_AGENTS
-    ?.split(",")
-    .map((a) => a.trim())
-    .filter(Boolean) as ("jw" | "wmo" | "cs-wmo")[] | undefined;
+// Fetch available agents from API (runtime configuration)
+const visibleAgents = ref<Array<{ id: "jw" | "wmo" | "cs-wmo"; label: string }>>([]);
+const isLoadingAgents = ref(true);
 
-const allAgents = [
-    { label: "JW", id: "jw" as const },
-    { label: "WMO", id: "wmo" as const },
-    { label: "CS-WMO", id: "cs-wmo" as const },
-];
+// Fetch agents on component mount
+onMounted(async () => {
+	try {
+		const response = await fetch(`${apiUrlOrigin}/api/v1/agents`);
+		if (response.ok) {
+			const data = await response.json();
+			visibleAgents.value = data.agents.map((agent: { id: string; label: string }) => ({
+				id: agent.id as "jw" | "wmo" | "cs-wmo",
+				label: agent.label,
+			}));
+		} else {
+			// Fallback to all agents if API fails
+			visibleAgents.value = [
+				{ id: "jw", label: "JW" },
+				{ id: "wmo", label: "WMO" },
+				{ id: "cs-wmo", label: "CS-WMO" },
+			];
+		}
+	} catch (err) {
+		console.error("Failed to fetch agents:", err);
+		// Fallback to all agents if fetch fails
+		visibleAgents.value = [
+			{ id: "jw", label: "JW" },
+			{ id: "wmo", label: "WMO" },
+			{ id: "cs-wmo", label: "CS-WMO" },
+		];
+	} finally {
+		isLoadingAgents.value = false;
+	}
+});
 
-const visibleAgents = (enabledAgentsEnv && enabledAgentsEnv.length
-    ? allAgents.filter((a) => enabledAgentsEnv.includes(a.id))
-    : allAgents);
+const canSelectAgent = computed(() => visibleAgents.value.length > 1);
+const selectedAgent = ref<"jw" | "wmo" | "cs-wmo" | undefined>();
 
-const canSelectAgent = visibleAgents.length > 1;
-const selectedAgent = ref<"jw" | "wmo" | "cs-wmo" | undefined>(visibleAgents[0]?.id);
+// Set default agent once agents are loaded
+watch(visibleAgents, (agents) => {
+	if (agents.length > 0 && !selectedAgent.value) {
+		selectedAgent.value = agents[0].id;
+	}
+}, { immediate: true });
 
 // Computed property to determine if send button should be disabled
 const isSendDisabled = computed(() => {
