@@ -8,6 +8,25 @@ API_BACKEND_URL=${API_BACKEND_URL:-"https://api-production-1f41.up.railway.app"}
 # Remove protocol (http:// or https://), port number, and path
 API_HOSTNAME=$(echo "$API_BACKEND_URL" | sed -e 's|^https\?://||' -e 's|:[0-9]*||' -e 's|/.*||')
 
+# Auto-detect DNS resolver based on platform
+# Azure: 168.63.129.16
+# Railway/Docker: Use system resolver from /etc/resolv.conf
+if [ -f "/etc/resolv.conf" ]; then
+    SYSTEM_DNS=$(grep -m1 "^nameserver" /etc/resolv.conf | awk '{print $2}')
+    if [ "$SYSTEM_DNS" = "168.63.129.16" ]; then
+        # Azure detected
+        DNS_RESOLVER="resolver 168.63.129.16 valid=10s;"
+    elif [ -n "$SYSTEM_DNS" ]; then
+        # Railway or other platform
+        DNS_RESOLVER="resolver $SYSTEM_DNS valid=10s;"
+    else
+        # Fallback: no explicit resolver (Nginx will use system default)
+        DNS_RESOLVER="# No explicit resolver needed"
+    fi
+else
+    DNS_RESOLVER="# No explicit resolver needed"
+fi
+
 echo "════════════════════════════════════════════════════════════"
 echo "  Jaap Junior Frontend - Starting"
 echo "════════════════════════════════════════════════════════════"
@@ -17,8 +36,10 @@ echo ""
 
 # Vervang placeholders in template met echte waarden
 echo "→ Configuring nginx with API backend..."
+echo "→ DNS Resolver: $DNS_RESOLVER"
 sed -e "s|\${API_BACKEND_URL}|$API_BACKEND_URL|g" \
     -e "s|\${API_HOSTNAME}|$API_HOSTNAME|g" \
+    -e "s|\${DNS_RESOLVER}|$DNS_RESOLVER|g" \
     /etc/nginx/templates/nginx.conf.template > /etc/nginx/conf.d/default.conf
 
 echo "✓ Nginx configured successfully"

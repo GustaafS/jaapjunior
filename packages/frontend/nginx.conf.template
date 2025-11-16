@@ -10,9 +10,9 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
-    # Azure Container Apps DNS resolver
-    # 168.63.129.16 is the Azure DNS resolver
-    resolver 168.63.129.16 valid=10s;
+    # DNS resolver - configured at runtime based on platform
+    # Will be replaced by entrypoint.sh with correct resolver
+    ${DNS_RESOLVER}
     resolver_timeout 5s;
 
     # Gzip compression
