@@ -17,8 +17,14 @@ if [ -f "/etc/resolv.conf" ]; then
         # Azure detected
         DNS_RESOLVER="resolver 168.63.129.16 valid=10s;"
     elif [ -n "$SYSTEM_DNS" ]; then
-        # Railway or other platform
-        DNS_RESOLVER="resolver $SYSTEM_DNS valid=10s;"
+        # Railway or other platform - check if IPv6
+        if echo "$SYSTEM_DNS" | grep -q ':'; then
+            # IPv6 address - needs brackets for Nginx
+            DNS_RESOLVER="resolver [$SYSTEM_DNS] valid=10s;"
+        else
+            # IPv4 address
+            DNS_RESOLVER="resolver $SYSTEM_DNS valid=10s;"
+        fi
     else
         # Fallback: no explicit resolver (Nginx will use system default)
         DNS_RESOLVER="# No explicit resolver needed"
