@@ -37,9 +37,13 @@ echo ""
 # Vervang placeholders in template met echte waarden
 echo "→ Configuring nginx with API backend..."
 echo "→ DNS Resolver: $DNS_RESOLVER"
+
+# Escape special characters for sed
+DNS_RESOLVER_ESCAPED=$(echo "$DNS_RESOLVER" | sed 's/[&/\]/\\&/g')
+
 sed -e "s|\${API_BACKEND_URL}|$API_BACKEND_URL|g" \
     -e "s|\${API_HOSTNAME}|$API_HOSTNAME|g" \
-    -e "s|\${DNS_RESOLVER}|$DNS_RESOLVER|g" \
+    -e "s|\${DNS_RESOLVER}|$DNS_RESOLVER_ESCAPED|g" \
     /etc/nginx/templates/nginx.conf.template > /etc/nginx/conf.d/default.conf
 
 echo "✓ Nginx configured successfully"
