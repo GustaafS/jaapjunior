@@ -89,7 +89,7 @@ const isLoadingAgents = ref(true);
 // Fetch agents on component mount
 onMounted(async () => {
 	try {
-		const response = await fetch(`${apiUrlOrigin}/api/v1/agents`);
+		const response = await fetch(`${window.location.origin}/api/v1/agents`);
 		if (response.ok) {
 			const data = await response.json();
 			visibleAgents.value = data.agents.map((agent: { id: string; label: string }) => ({
